@@ -6,7 +6,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const GROK_KEY = process.env.GROK_API_KEY;
 
-app.use(cors());
+app.use(cors({ origin: '*' }));
 app.use(express.json());
 
 app.get('/', (req, res) => {
