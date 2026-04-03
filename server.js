@@ -17,7 +17,9 @@ app.post('/search', async (req, res) => {
   const { topic, count = 10 } = req.body;
   if (!topic) return res.status(400).json({ error: 'Topic is required' });
 
-  const prompt = `Search X right now for the top ${count} most recent and engaging posts about: "${topic}".
+  const today = new Date().toDateString();
+
+  const prompt = `Today is ${today}. Search your live X (Twitter) knowledge and find the ${count} most recent posts about "${topic}" from the last 24-48 hours.
 
 For EACH post return this EXACT block:
 
@@ -33,10 +35,10 @@ CONTEXT: One sentence on the sentiment or why this post is notable
 After all posts:
 
 ---SUMMARY---
-2-3 punchy sentences summarising what people on X are saying about "${topic}" right now. Name real users. Be direct.
+2-3 punchy sentences summarising what people on X are saying about "${topic}" right now today ${today}. Name real users. Be direct.
 ---END---
 
-Only use real posts you can actually find on X right now. Real usernames, real text, real numbers.`;
+IMPORTANT: Only return posts from the last 48 hours. Use real @usernames that exist on X. Real tweet text only.`;
 
   try {
     const response = await fetch('https://api.x.ai/v1/chat/completions', {
@@ -50,22 +52,13 @@ Only use real posts you can actually find on X right now. Real usernames, real t
         messages: [
           {
             role: 'system',
-            content: 'You are Grok with live access to X. Use your real-time X search to find actual current posts. Only return real posts that exist on X right now.'
+            content: `You are Grok, built by xAI, with real-time access to X (Twitter) posts. Today is ${today}. When asked about topics, search X for the most recent posts from today and yesterday only. Never use old or outdated information. Always return current posts with real usernames.`
           },
           {
             role: 'user',
             content: prompt
           }
         ],
-        search_parameters: {
-          mode: 'on',
-          sources: [
-            {
-              type: 'x'
-            }
-          ],
-          max_search_results: count
-        },
         max_tokens: 3000,
         temperature: 0.1
       })
@@ -73,6 +66,7 @@ Only use real posts you can actually find on X right now. Real usernames, real t
 
     if (!response.ok) {
       const err = await response.json();
+      console.error('Grok error:', JSON.stringify(err));
       return res.status(response.status).json({ error: err });
     }
 
