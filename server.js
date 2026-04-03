@@ -19,13 +19,12 @@ app.post('/search', async (req, res) => {
   if (!topic) return res.status(400).json({ error: 'Topic is required' });
 
   try {
-    const query = encodeURIComponent(`${topic} -is:retweet lang:en`);
-    const url = `https://api.twitter.com/2/tweets/search/recent?query=${query}&max_results=${Math.min(Math.max(count, 10), 100)}&tweet.fields=created_at,public_metrics,author_id&expansions=author_id&user.fields=name,username`;
+    // -is:reply -is:retweet ensures only original posts
+    const query = encodeURIComponent(`${topic} -is:reply -is:retweet lang:en`);
+    const url = `https://api.twitter.com/2/tweets/search/recent?query=${query}&max_results=50&tweet.fields=created_at,public_metrics,author_id,conversation_id&expansions=author_id&user.fields=name,username`;
 
     const response = await fetch(url, {
-      headers: {
-        'Authorization': `Bearer ${X_BEARER}`
-      }
+      headers: { 'Authorization': `Bearer ${X_BEARER}` }
     });
 
     if (!response.ok) {
@@ -35,18 +34,30 @@ app.post('/search', async (req, res) => {
     }
 
     const data = await response.json();
-    const tweets = data.data || [];
+    let tweets = data.data || [];
     const users = {};
     if (data.includes && data.includes.users) {
       data.includes.users.forEach(u => { users[u.id] = u; });
     }
 
-    // Use Grok to summarise the real tweets
-    const tweetLines = tweets.slice(0, 10).map(t => {
+    // Sort by engagement: likes + retweets*2 + replies
+    tweets.sort((a, b) => {
+      const engA = (a.public_metrics?.like_count||0) + (a.public_metrics?.retweet_count||0)*2 + (a.public_metrics?.reply_count||0);
+      const engB = (b.public_metrics?.like_count||0) + (b.public_metrics?.retweet_count||0)*2 + (b.public_metrics?.reply_count||0);
+      return engB - engA;
+    });
+
+    // Take top N
+    tweets = tweets.slice(0, count);
+
+    // Build tweet content for Grok to summarise
+    const tweetContent = tweets.map(t => {
       const u = users[t.author_id];
-      return `@${u?.username || 'unknown'}: ${t.text}`;
+      const m = t.public_metrics || {};
+      return `@${u?.username||'unknown'} (${m.like_count||0} likes, ${m.retweet_count||0} retweets): ${t.text}`;
     }).join('\n\n');
 
+    // Ask Grok for a clean summary
     const grokRes = await fetch('https://api.x.ai/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -58,15 +69,15 @@ app.post('/search', async (req, res) => {
         messages: [
           {
             role: 'system',
-            content: 'You summarise real tweets. Be direct, punchy and journalistic.'
+            content: 'You summarise social media posts. Write in plain English. No markdown, no asterisks, no bullet points. Be clear, direct and journalistic.'
           },
           {
             role: 'user',
-            content: `Summarise what people are saying about "${topic}" based on these real tweets in 2-3 sentences. Name specific users:\n\n${tweetLines}`
+            content: `These are real posts from X about "${topic}". Write a clear 2-3 sentence overview of what people are generally saying about this topic. Focus on the overall mood, key opinions, and any patterns you notice. Then on a new line write "Top voices:" followed by the 3 most engaged posts in the format: @handle says "[short quote]" — [one sentence on why it stands out].\n\nPosts:\n${tweetContent}`
           }
         ],
-        max_tokens: 300,
-        temperature: 0.3
+        max_tokens: 400,
+        temperature: 0.2
       })
     });
 
