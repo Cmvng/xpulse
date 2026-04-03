@@ -17,26 +17,26 @@ app.post('/search', async (req, res) => {
   const { topic, count = 10 } = req.body;
   if (!topic) return res.status(400).json({ error: 'Topic is required' });
 
-  const prompt = `You have real-time access to X (Twitter). Search X RIGHT NOW for the ${count} most recent, viral, or talked-about posts about: "${topic}".
+  const prompt = `Search X right now for the top ${count} most recent and engaging posts about: "${topic}".
 
 For EACH post return this EXACT block:
 
 ---TWEET---
 HANDLE: @realusername
 NAME: Real Display Name
-TEXT: The actual tweet text or very close paraphrase
+TEXT: The actual tweet text
 LIKES: number
 RETWEETS: number
-CONTEXT: One sentence on why this is notable or what sentiment it shows
+CONTEXT: One sentence on the sentiment or why this post is notable
 ---END---
 
 After all posts:
 
 ---SUMMARY---
-2-3 punchy sentences on what people on X are saying about "${topic}" right now. Name specific users. Be direct.
+2-3 punchy sentences summarising what people on X are saying about "${topic}" right now. Name real users. Be direct.
 ---END---
 
-Use REAL usernames. Real tweet content. No preamble, no sign-off.`;
+Only use real posts you can actually find on X right now. Real usernames, real text, real numbers.`;
 
   try {
     const response = await fetch('https://api.x.ai/v1/chat/completions', {
@@ -48,11 +48,26 @@ Use REAL usernames. Real tweet content. No preamble, no sign-off.`;
       body: JSON.stringify({
         model: 'grok-3-latest',
         messages: [
-          { role: 'system', content: 'You have live access to X (Twitter). Search X in real time and return exactly what is requested. Use real usernames and real tweet content.' },
-          { role: 'user', content: prompt }
+          {
+            role: 'system',
+            content: 'You are Grok with live access to X. Use your real-time X search to find actual current posts. Only return real posts that exist on X right now.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
         ],
+        search_parameters: {
+          mode: 'on',
+          sources: [
+            {
+              type: 'x'
+            }
+          ],
+          max_search_results: count
+        },
         max_tokens: 3000,
-        temperature: 0.2
+        temperature: 0.1
       })
     });
 
