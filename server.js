@@ -21,7 +21,7 @@ app.post('/search', async (req, res) => {
   try {
     // -is:reply -is:retweet ensures only original posts
     const query = encodeURIComponent(`${topic} -is:reply -is:retweet lang:en`);
-    const url = `https://api.twitter.com/2/tweets/search/recent?query=${query}&max_results=50&tweet.fields=created_at,public_metrics,author_id,conversation_id&expansions=author_id&user.fields=name,username`;
+    const url = `https://api.twitter.com/2/tweets/search/recent?query=${query}&max_results=50&tweet.fields=created_at,public_metrics,author_id,conversation_id&expansions=author_id&user.fields=name,username,profile_image_url`;
 
     const response = await fetch(url, {
       headers: { 'Authorization': `Bearer ${X_BEARER}` }
